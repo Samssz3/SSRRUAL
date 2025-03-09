@@ -1,0 +1,75 @@
+from machine import Pin, PWM, time_pulse_us
+from time import sleep, sleep_us
+
+# Configura los pines
+trig_pin = Pin(5, Pin.OUT)  # GPIO5 para Trig
+echo_pin = Pin(18, Pin.IN)   # GPIO18 para Echo
+pin_lluvia = Pin(2, Pin.IN)  # GPIO2 para el sensor de lluvia
+
+# Configura el servomotor en el pin 12
+servo = PWM(Pin(12), freq=50)  # Frecuencia de 50 Hz para servomotores
+
+# Valores de duty para el servomotor SG90
+SERVO_MIN_DUTY = 20  # 0 grados (1 ms)
+SERVO_MAX_DUTY = 120  # 180 grados (2 ms)
+SERVO_ABIERTO = 120  # Tapa abierta
+SERVO_CERRADO = 20  # Tapa cerrada
+
+# Variables de control
+tapa_abierta = False
+tapa_cerrada = False
+
+# Función para mover el servo a una posición específica
+def mover_servo(duty):
+    servo.duty(duty)  # Establece la posición deseada
+    sleep(0.5)  # Espera para que el servo alcance la posición
+
+def medir_distancia():
+    trig_pin.off()
+    sleep_us(2)
+    trig_pin.on()
+    sleep_us(10)
+    trig_pin.off()
+
+    duracion = time_pulse_us(echo_pin, 1)  # 1 = HIGH
+    if duracion < 0:
+        return -1
+
+    distancia = (duracion * 0.0343) / 2
+    return distancia
+
+def distancia_a_porcentaje(distancia):
+    distancia_min = 5  # 5 cm = 100%
+    distancia_max = 15  # 15 cm = 0%
+
+    if distancia < distancia_min:
+        return 100
+    elif distancia > distancia_max:
+        return 0
+    else:
+        porcentaje = 100 - ((distancia - distancia_min) / (distancia_max - distancia_min)) * 100
+        return int(porcentaje)
+
+while True:
+    lluvia_detectada = pin_lluvia.value() == 0
+    distancia = medir_distancia()
+    
+    if distancia >= 0:
+        porcentaje = distancia_a_porcentaje(distancia)
+        print("Distancia: {:.2f} cm -> Porcentaje: {}%".format(distancia, porcentaje))
+
+        if not tapa_abierta and lluvia_detectada:
+            print("Lluvia detectada. Abriendo la tapa.")
+            mover_servo(SERVO_ABIERTO)  # Mueve directamente a la posición abierta
+            tapa_abierta = True
+            tapa_cerrada = False  # Reinicia el estado de cierre
+
+        if tapa_abierta and porcentaje == 100 and not tapa_cerrada:
+            print("Tanque lleno. Cerrando la tapa.")
+            mover_servo(SERVO_CERRADO)  # Mueve directamente a la posición cerrada
+            tapa_cerrada = True
+            tapa_abierta = False  # Reinicia el estado de apertura
+    else:
+        print("Error: No se detectó un eco")
+    
+    sleep(1)
