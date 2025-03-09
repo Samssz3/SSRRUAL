@@ -1,0 +1,5 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "devkit-esp32")(type "KiCad")(uri "C:/Users/Familia Betancourt/Desktop/Kicad (pcb)/Modelo de la esp 32")(options "")(descr ""))
+  (lib (name "cd42")(type "KiCad")(uri "C:/Users/Familia Betancourt/Desktop/esp 32 pcb/mh-cd42/kicad-cd42-lib-main/cd42.pretty")(options "")(descr ""))
+)
