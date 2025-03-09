@@ -1,0 +1,108 @@
+from machine import Pin, time_pulse_us
+from time import sleep, sleep_us
+
+# Configura los pines
+trig_pin = Pin(5, Pin.OUT)  # GPIO5 para Trig
+echo_pin = Pin(18, Pin.IN)   # GPIO18 para Echo
+pin_lluvia = Pin(2, Pin.IN)  # GPIO2 para el sensor de lluvia
+
+# Variables de control
+tapa_abierta = False
+tapa_cerrada = False
+
+def medir_distancia():
+    trig_pin.off()
+    sleep_us(2)
+    trig_pin.on()
+    sleep_us(10)
+    trig_pin.off()
+
+    duracion = time_pulse_us(echo_pin, 1)  # 1 = HIGH
+    if duracion < 0:
+        return -1
+
+    distancia = (duracion * 0.0343) / 2
+    return distancia
+
+def distancia_a_porcentaje(distancia):
+    distancia_min = 5  # 5 cm = 100%
+    distancia_max = 15  # 15 cm = 0%
+
+    if distancia < distancia_min:
+        return 100
+    elif distancia > distancia_max:
+        return 0
+    else:
+        porcentaje = 100 - ((distancia - distancia_min) / (distancia_max - distancia_min)) * 100
+        return int(porcentaje)
+
+while True:
+    lluvia_detectada = pin_lluvia.value() == 0
+    distancia = medir_distancia()
+    
+    if distancia >= 0:
+        porcentaje = distancia_a_porcentaje(distancia)
+        print("Distancia: {:.2f} cm -> Porcentaje: {}%".format(distancia, porcentaje))
+
+        if not tapa_abierta and lluvia_detectada:
+            print("Lluvia detectada. Abriendo la tapa.")
+            tapa_abierta = True
+            tapa_cerrada = False  # Reinicia el estado de cierre
+
+        if tapa_abierta and porcentaje == 100 and not tapa_cerrada:
+            print("Tanque lleno. Cerrando la tapa.")
+            tapa_cerrada = True
+            tapa_abierta = False  # Reinicia el estado de apertura
+    else:
+        print("Error: No se detectó un eco")
+    
+    sleep(1)
+
+# platform: micropython-esp32
+# send: wifi
+# ip_mpy: 192.168.4.1
+# serialport: 
+# filename: main.py
+from machine import Pin, PWM
+import time
+
+# Configuración del sensor de lluvia
+rain_sensor = Pin(4, Pin.IN)  # Conectar DO del sensor a GPIO4
+
+# Configuración del servomotor
+servo_pin = PWM(Pin(12), freq=50)  # Conectar señal del servomotor a GPIO13
+time.sleep(1)
+
+# Funciones para controlar el servomotor
+def servo_angle(angle):
+  duty = int(40 + (angle / 180) * 100)  # Convertir ángulo a ciclo de trabajo
+  servo_pin.duty(duty)
+  time.sleep_ms(500)  # Esperar medio segundo para que el servomotor se mueva
+
+def servo_rotate(times, direction):
+  for _ in range(times):
+    if direction == 1:
+      servo_angle(0)  # Mover a 0 grados
+      servo_angle(90)  # Mover a 90 grados
+      servo_angle(180)  # Mover a 180 grados
+    elif direction == -1:
+      servo_angle(180)  # Mover a 180 grados
+      servo_angle(90)  # Mover a 90 grados
+      servo_angle(0)  # Mover a 0 grados
+
+# Estado inicial del sensor de lluvia
+last_state = rain_sensor.value()
+
+# Bucle principal
+while True:
+  current_state = rain_sensor.value()  # Leer el estado actual del sensor
+  if current_state != last_state:  # Si el estado del sensor cambia
+    if current_state == 0:  # Si detecta agua (LOW)
+      print("¡Lluvia detectada! Girando 5 veces en sentido horario.")
+      servo_rotate(5, 1)  # Girar 5 veces en sentido horario
+    else:  # Si no detecta agua (HIGH)
+      print("No hay lluvia. Girando 3 veces en sentido antihorario.")
+      servo_rotate(3, -1)  # Girar 3 veces en sentido antihorario
+      last_state = current_state  # Actualizar el último estado
+
+time.sleep(1)  # Esperar 1 segundos antes de la siguiente lectura
